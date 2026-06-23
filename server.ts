@@ -2,10 +2,13 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import cors from "cors";
+import dotenv from "dotenv";
 import { GoogleGenAI } from "@google/genai";
 
+dotenv.config();
+
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -104,16 +107,22 @@ function getLocalFallbackResponse(msg: string, context: string): string {
 app.post("/api/chat", async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "Server error: Missing Gemini API Key" });
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
     const { message } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
+
+    if (!apiKey) {
+      console.warn("Missing GEMINI_API_KEY. Using local fallback response.");
+      const contextData = fs.existsSync(dbPath)
+        ? JSON.parse(fs.readFileSync(dbPath, "utf-8")).context || ""
+        : "";
+      const fallbackReply = getLocalFallbackResponse(message, contextData);
+      return res.json({ reply: fallbackReply, warning: "Missing Gemini API Key" });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
 
     let contextData = "";
     if (fs.existsSync(dbPath)) {
